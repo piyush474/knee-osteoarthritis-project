@@ -121,12 +121,12 @@ def create_irv2_model(input_shape, num_classes=3, learning_rate=1e-4, pretrained
     
     return model
 
-def train_model(model, train_gen, valid_gen, epochs=100, steps_per_epoch=400):
+def train_model(model, train_gen, valid_gen, epochs=100, steps_per_epoch=None):
     callbacks = [
         EarlyStopping(monitor='val_loss', patience=7, restore_best_weights=True),
         ReduceLROnPlateau(monitor='val_loss', factor=0.2, patience=3, min_lr=1e-6, verbose=1)
     ]
-    return model.fit(train_gen, validation_data=valid_gen, epochs=epochs, steps_per_epoch=steps_per_epoch, callbacks=callbacks, verbose=1)
+    return model.fit(train_gen, validation_data=valid_gen, epochs=epochs, callbacks=callbacks, verbose=1)
 
 def evaluate_model(model, test_gen):
     predictions = np.argmax(model.predict(test_gen), axis=1)
@@ -153,7 +153,7 @@ if __name__ == "__main__":
     test_df = load_and_preprocess_dataset(data_path, categories, "test")
     
     # Create data generators
-    train_gen, valid_gen, test_gen = create_generators(train_df, valid_df, test_df)
+    train_gen, valid_gen, test_gen = create_generators(train_df, valid_df, test_df, batch_size=16)
 
     def generator_wrapper():
         while True:
@@ -175,7 +175,7 @@ if __name__ == "__main__":
     # model = create_irv2_model(input_shape, pretrained_weights='RadImageNet-IRV2_notop.h5')
     
     # Train model
-    history = train_model(model, train_dataset, valid_gen)
+    history = train_model(model, train_gen, valid_gen)
 
 
     
