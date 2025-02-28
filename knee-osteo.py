@@ -18,6 +18,7 @@ from sklearn.preprocessing import LabelEncoder
 from sklearn.metrics import classification_report, confusion_matrix
 from imblearn.over_sampling import RandomOverSampler
 from tensorflow.keras.regularizers import l2
+from tensorflow.keras.initializers import he_normal
 
 # Set logging level to reduce TensorFlow warnings
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
@@ -52,7 +53,7 @@ def balance_dataset(df):
     X_resampled, y_resampled = ros.fit_resample(df[['image_path']], df['category_encoded'])
     return pd.DataFrame({'image_path': X_resampled['image_path'], 'category_encoded': y_resampled.astype(str)})
 
-def create_generators(train_df, valid_df, test_df, img_size=(224, 224), batch_size=64):
+def create_generators(train_df, valid_df, test_df, img_size=(224, 224), batch_size=16):
     train_data_gen = ImageDataGenerator(rescale=1./255, rotation_range=180, width_shift_range=0.2, 
                                     shear_range=0.1, zoom_range=0.2, brightness_range=[0.8, 1.2],
                                     height_shift_range=0.2, horizontal_flip=True)
@@ -76,7 +77,7 @@ def create_xception_model(input_shape, num_classes=3, learning_rate=1e-4):
     x = GlobalAveragePooling2D()(x)
     x = BatchNormalization()(x)
     x = Dropout(0.4)(x)
-    x = Dense(512, activation="relu", kernel_regularizer=l2(0.001))(x)
+    x = Dense(1024, activation="relu", kernel_initializer=he_normal(), kernel_regularizer=l2(0.001))(x)
     x = Dropout(0.3)(x)
     outputs = Dense(num_classes, activation="softmax")(x)
 
@@ -121,12 +122,12 @@ def create_irv2_model(input_shape, num_classes=3, learning_rate=1e-4, pretrained
     
     return model
 
-def train_model(model, train_gen, valid_gen, epochs=100, steps_per_epoch=None):
+def train_model(model, train_gen, valid_gen, epochs=100, steps_per_epoch=400):
     callbacks = [
-        EarlyStopping(monitor='val_loss', patience=7, restore_best_weights=True),
+        EarlyStopping(monitor='val_loss', patience=9, restore_best_weights=True),
         ReduceLROnPlateau(monitor='val_loss', factor=0.2, patience=3, min_lr=1e-6, verbose=1)
     ]
-    return model.fit(train_gen, validation_data=valid_gen, epochs=epochs, callbacks=callbacks, verbose=1)
+    return model.fit(train_gen, validation_data=valid_gen, epochs=epochs, steps_per_epoch=steps_per_epoch, callbacks=callbacks, verbose=1)
 
 def evaluate_model(model, test_gen):
     predictions = np.argmax(model.predict(test_gen), axis=1)
@@ -153,7 +154,7 @@ if __name__ == "__main__":
     test_df = load_and_preprocess_dataset(data_path, categories, "test")
     
     # Create data generators
-    train_gen, valid_gen, test_gen = create_generators(train_df, valid_df, test_df, batch_size=16)
+    train_gen, valid_gen, test_gen = create_generators(train_df, valid_df, test_df, batch_size=32)
 
     def generator_wrapper():
         while True:
@@ -175,9 +176,9 @@ if __name__ == "__main__":
     # model = create_irv2_model(input_shape, pretrained_weights='RadImageNet-IRV2_notop.h5')
     
     # Train model
-    history = train_model(model, train_gen, valid_gen)
+    history = train_model(model, train_dataset, valid_gen)
+    model.save("knee_osteo2.h5")
 
 
-    
     # Evaluate model
     evaluate_model(model, test_gen)
